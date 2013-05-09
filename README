@@ -10,7 +10,7 @@ This is a mirror of http://www.vim.org/scripts/script.php?script_id=4381
 
 " == Usage ==
 "
-" Assuming your mapleader is '&#039 (the default):
+" Assuming your mapleader is backslash (the default):
 "
 "   \?   Display a list of recently recorded actions
 "

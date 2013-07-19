@@ -74,7 +74,7 @@
 "
 "   :RepeatLastDisable   Disables action recording, leaves macro record mode.
 "
-"   :RepeatLast<Ctrl-D>  or  <Tab>      More commands, some toggle info.
+"   :RepeatLast<Ctrl-D>  or  <Ctrl-N>      More commands, some toggle info.
 "
 " New feature - Auto Ignoring:
 "
@@ -126,158 +126,6 @@
 " Use of some <Tab>-completion plugins may produce unexpected behaviour when
 " replaying actions including a <Tab>-completion.  (Although Vim's built-in
 " '.' does not suffer from this.)
-
-
-
-" == Bugs and TODOs ==
-"
-" NOTE: Increasing cmdheight is preferable to adding frequent calls to sleep,
-"       which pause Vim long enough to show messages, but can slow down / lock
-"       up Vim when we are pressing a lot of keys (unless I find a way to
-"       check the key buffer length).  TODO: Yes, getchar(0) can do that!
-"
-" TODO: Change the timing of RepeatLast_TriggerCursorHold according to the
-"       recent typing speed of the user, so we can trigger it slowly when we
-"       are confident the user won't interrupt it.  Or better, don't set a
-"       longer updatetime, do a longer sleep (yes may cause freeze, but won't
-"       lose any keystrokes).
-"
-" TODO: \| \? \. etc. should probably warn us if RepeatLast is disabled!
-"
-" TODO: Some of the commands are kinda useless.  Make them optional or remove them!
-"
-" TODO: Even using large ch and with RepeatLast_TriggerCursorHold disabled,
-"       warning messages such as "search hit BOTTOM" are hidden.  At least
-"       offer a sleep *option* so we can see these.  Or ... echo "hidden" at
-"       more opportune moments.
-"
-" TODO: Re-enable recording on *any* non-movement might be desirable.  At the
-"       moment we only re-enable on InsertEnter changes.
-"
-" TODO: RepeatLast_TriggerCursorHold completely fails to trigger in GUI!
-"       Did it always to this?
-"
-" TODO: RepeatLast_Stop_Ignoring_On_Edit might not need to pre-clear the
-" macro, if we detect it InsertEnter instead of InsertLeave, although that
-" might lose the command that started the insert.  :P
-"
-" TODO: It would be convenient to add:
-"
-"   3\X     Delete the 3rd old action from history
-"
-"   3,7\X   Delete actions 3 to 7 from history (inclusive)
-"
-"           That stroke may not be allowed.  3\X  5 times should do it.  :-/
-"
-" TODO: Consider renaming "movement" to "motion" throughout the docs.
-"
-" Using register x, occasionally we do 'qx' to start recording but recording
-" is already in progress!  This stops recording and 'x' deletes one char.
-" Bad!  We need to detect whether recording is in progress or not.
-" We could also use a less harmful register, but that's not the true solution.
-" DONE: Since it appears Vim does not currently expose the state of recording,
-" moving to a less harmful register, e.g. 'z' or 'm', might be wise.
-" CONSIDER: We can at least notice when recording has been disabled, because
-" the CursorHold event will eventually fire (it never fires when recording)!
-"
-" DONE: We could use a way to *start* recording again, if temporary Ignoring
-" is enabled but unwanted.  We could just do 10 random movements.  We could
-" make \# explicitly toggle (re-enable if ignoring is enabled).  On re-enable
-" we may want to clear the current macro; it could well be a mix of unwanted
-" and wanted.
-"
-" DONE: Offer a way to toggle on/off at runtime.
-"
-" DONE: To deal with recording of movements we don't want, an alternative
-" (optional) approach might be to go modal.  After the first use of '4\.' stop
-" recording (at the very least movements) so that the user can move around and
-" '4\.' in other places.  Perhaps we could re-enable recording with some
-" simple heuristic, like if the user makes more than 12 keystrokes without
-" re-using '\.'.
-"
-" CONSIDER: Or we could do something like "do not officially add movement
-" actions to the history *until* they are followed by an edit action".  This
-" would allow us to move freely after a set of actions, and then repeat them
-" without having to worry about the extra movement actions.  However it would
-" also *prevent* us from ending an action-group in a movement that might move
-" it to the correct place for the next movement.
-"
-" DONE: We might try to restore CursorHold events by periodically letting Vim
-" out of recording mode, but re-enabling recording as soon as CursorHold
-" fires!  A downside might be that we would fail to record keystrokes typed
-" very quickly after said release (before CursorHold fires).
-"
-" TODO (elsewhere): Accidentally doing  80\/  instead of  80\?  throws up a
-" lot of error messages: "Error detected while processing function
-"            MyRepeatedSearch..MyRepeatedSearch..MyRepeatedSearch.."
-" This actually comes from joey.vim.  It should fail gracefully when given a
-" count.
-"
-" DONE: Perhaps more advanced usage, which would also avoid complications
-" with *new* recordings might be to save repeated actions in a register, so it
-" can be recalled without worry about ignoring new movements/actions.
-" CONSIDER: We could even cycle the register used for saving, if we want to
-" remember older interesting action groups.
-"
-" Summary of the problems with "recording" message masking 'echo'-ed lines:
-"
-"  1. If we start macro recording after 3 echoes but before more echoes, the
-"     last of the previous 3 lines will be cleared by "recording" message
-"     (although it will also be cleared itself too, by the following echoes).
-"     We always see a blank line at that point (after the first 2).
-"
-"     We can address this by echoing a dumb line beforehand.
-"
-"  2. If we start macro recording at the end, before returning to the user, the
-"     "recording" message appears on the last of your ch lines.  But if you
-"     have N ch lines and there were *exactly* N echoes, the last one will be
-"     hidden by the "recording" message.  If there were <N echoes no problem,
-"     we can see them all.  If there were >N echoes, the overflow message will
-"     give us a change to see them all.
-"
-"     (This summary is slightly inaccurate - the problem also exists if we
-"     'qx' and then echo.)
-"
-"     (Does this problem only exist when we use RepeatLast_TriggerCursorHold?)
-"
-"     We can also address this by echoing a dumb line beforehand.  This might
-"     cause "unnecessary" overflow, but it *is* needed, to see that last echo.
-"
-"     In either case, a dummy line is pointless if there were no previous
-"     echos??
-"
-"     Whilst we could count our own echos, we cannot count any emitted from
-"     Vim or other scripts.
-
-
-
-" == Original development brainstorm ==
-
-" One approach might be to record a macro *all* the time, and then take the
-" last few things we need from it, when "\." is called.
-
-" The problem is, the macro might contain 12 keys which actually represent
-" only 2 actions.  For example "cwNewWord" is only one action.
-
-" Having to interactively select how much of the macro to use will slow down
-" the process, and lose the whole advantage of this feature.
-
-" So... can we split up the keys the macro recorded into actions?
-"
-"   - By parsing the macro from the start, we might be able to.  Hard work.
-"
-"   - We could watch for mode changes such as InsertEnter, CursorHold, and
-"     perhaps use these to split up our macro keys while they are being
-"     generated.  Still this will leave us not knowing how to split actions
-"     which do not change mode.  But it seems a great many do call
-"     CursorMoved.  :)
-"
-"     We are taking this approach.
-
-" Other alternatives?  Possibly by watching undo history (like UndoTree does)
-" or :changes (I'm not sure we can access this), or doing raw diffs on the
-" file, we might be able to crudely discover what changes the user has made,
-" and convert these into repeatable actions.  Sounds pretty heavy.
 
 
 
@@ -381,7 +229,7 @@ endif
 "
 " BUG: They can also block recording of actions taken when in visual mode,
 "      because CursorHold does not fire then, so our recording is not
-"      re-started.  We can fix this by never triggering if we detect we are in
+"      re-started.  We could fix this by never triggering if we detect we are in
 "      visual mode.
 "
 " BUG: If my <C-J> mapping is present, 4 works fine on  }j  but not on
@@ -408,6 +256,12 @@ endif
 " into &ch-1.
 if !exists("g:RepeatLast_List_Delimeter")
   let g:RepeatLast_List_Delimeter = "\n"
+endif
+
+" Whether to anticipate and ignore a keypress after ShowRecent's |hit-enter|
+" prompt.  (Probably wanted.)
+if !exists("g:RepeatLast_IgnoreHitEnter")
+  let g:RepeatLast_IgnoreHitEnter = 1
 endif
 
 
@@ -506,6 +360,8 @@ augroup END
 
 " Sometimes we skip recording events for a while
 let s:ignoringCount = 0
+" This one drops the first stroke, but keeps the rest of the macro.
+let s:ignoreNextKeystroke = 0
 
 let s:currentlyReplaying = 0
 let s:old_updatetime = 0   " When non-zero, we have left macro recording mode.
@@ -557,10 +413,10 @@ function! s:EndActionDetected(trigger)
     " clearing of the macro for general ignoring below.
     if g:RepeatLast_Stop_Ignoring_On_Edit != 0 && (a:trigger == "InsertLeave" || a:trigger == "InsertEnter")
 
-      " BUG: I never see this echoed!
         if g:RepeatLast_Show_Ignoring_Info != 0
           echo "Edits detected by ".a:trigger." - no longer ignoring!"
           sleep 400ms
+          " We need the sleep or we never see this echoed!
         endif
       let s:ignoringCount = 0
 
@@ -582,6 +438,7 @@ function! s:EndActionDetected(trigger)
         " feature.  Or perhaps we always do want to forget ignored actions!
         " E.g. if we don't do this: \|jjA will record the jj when it shouldn't!
         call s:RestartRecording()
+        let s:ignoreNextKeystroke = 0
       endif
       if s:ignoringCount == 0
         if g:RepeatLast_Show_Ignoring_Info != 0
@@ -643,6 +500,14 @@ function! s:EndActionDetected(trigger)
     " let extraReport = extraReport . "\n"
   " endif
   " let lastAction = cleanedAction
+
+  if s:ignoreNextKeystroke
+    let s:ignoreNextKeystroke = 0
+    if g:RepeatLast_Show_Debug_Info != 0
+      echo "Ignoring single action \"". s:MyEscape(lastAction[0:0]) ."\" as requested."
+    endif
+    let lastAction = lastAction[1:]
+  endif
 
   if lastAction == ""
 
@@ -861,6 +726,12 @@ function! s:ShowRecent(num)
   " OK since we moved code around, it seems this is no longer needed.
   "echo "I will get hidden"
   call s:RestartRecording()
+  " BUG TODO: This will lose any keystrokes which are still lagging in the
+  " macro and have not yet been saved as an action.  We should probably save
+  " any recorded actions at this point, but just discard the keystrokes from
+  " the end that lead to this call.
+  " For example, compare `:echo "lost"<Enter>\?` vs `:echo "kept"<Enter>kk\?`
+  " NOTE: When changing this, recommend also doing the same in RepeatLast().
 
   if numWanted > len(s:earlierActions)
     let numWanted = len(s:earlierActions)
@@ -889,6 +760,12 @@ function! s:ShowRecent(num)
 
   if s:ignoringCount > 0
     echo "[Auto-ignoring enabled for another ".s:ignoringCount." events.]"
+  endif
+
+  " This almost always causes a |hit-enter| prompt, which usually results in a
+  " user press of <Space> or <Enter> which gets recorded!  To prevent that:
+  if g:RepeatLast_IgnoreHitEnter
+    let s:ignoreNextKeystroke = 1
   endif
 
 endfunction
@@ -1273,4 +1150,156 @@ function! FoldNicely(numBlankLines)
   exec oldLine.":"
 
 endfunction
+
+
+
+" == Bugs and TODOs ==
+"
+" NOTE: Increasing cmdheight is preferable to adding frequent calls to sleep,
+"       which pause Vim long enough to show messages, but can slow down / lock
+"       up Vim when we are pressing a lot of keys (unless I find a way to
+"       check the key buffer length).  TODO: Yes, getchar(0) can do that!
+"
+" TODO: Change the timing of RepeatLast_TriggerCursorHold according to the
+"       recent typing speed of the user, so we can trigger it slowly when we
+"       are confident the user won't interrupt it.  Or better, don't set a
+"       longer updatetime, do a longer sleep (yes may cause freeze, but won't
+"       lose any keystrokes).
+"
+" TODO: \| \? \. etc. should probably warn us if RepeatLast is disabled!
+"
+" TODO: Some of the commands are kinda useless.  Make them optional or remove them!
+"
+" TODO: Even using large ch and with RepeatLast_TriggerCursorHold disabled,
+"       warning messages such as "search hit BOTTOM" are hidden.  At least
+"       offer a sleep *option* so we can see these.  Or ... echo "hidden" at
+"       more opportune moments.
+"
+" TODO: Re-enable recording on *any* non-movement might be desirable.  At the
+"       moment we only re-enable on InsertEnter changes.
+"
+" TODO: RepeatLast_TriggerCursorHold completely fails to trigger in GUI!
+"       Did it always to this?
+"
+" TODO: RepeatLast_Stop_Ignoring_On_Edit might not need to pre-clear the
+" macro, if we detect it InsertEnter instead of InsertLeave, although that
+" might lose the command that started the insert.  :P
+"
+" TODO: It would be convenient to add:
+"
+"   3\X     Delete the 3rd old action from history
+"
+"   3,7\X   Delete actions 3 to 7 from history (inclusive)
+"
+"           That stroke may not be allowed.  3\X  5 times should do it.  :-/
+"
+" TODO: Consider renaming "movement" to "motion" throughout the docs.
+"
+" Using register x, occasionally we do 'qx' to start recording but recording
+" is already in progress!  This stops recording and 'x' deletes one char.
+" Bad!  We need to detect whether recording is in progress or not.
+" We could also use a less harmful register, but that's not the true solution.
+" DONE: Since it appears Vim does not currently expose the state of recording,
+" moving to a less harmful register, e.g. 'z' or 'm', might be wise.
+" CONSIDER: We can at least notice when recording has been disabled, because
+" the CursorHold event will eventually fire (it never fires when recording)!
+"
+" DONE: We could use a way to *start* recording again, if temporary Ignoring
+" is enabled but unwanted.  We could just do 10 random movements.  We could
+" make \# explicitly toggle (re-enable if ignoring is enabled).  On re-enable
+" we may want to clear the current macro; it could well be a mix of unwanted
+" and wanted.
+"
+" DONE: Offer a way to toggle on/off at runtime.
+"
+" DONE: To deal with recording of movements we don't want, an alternative
+" (optional) approach might be to go modal.  After the first use of '4\.' stop
+" recording (at the very least movements) so that the user can move around and
+" '4\.' in other places.  Perhaps we could re-enable recording with some
+" simple heuristic, like if the user makes more than 12 keystrokes without
+" re-using '\.'.
+"
+" CONSIDER: Or we could do something like "do not officially add movement
+" actions to the history *until* they are followed by an edit action".  This
+" would allow us to move freely after a set of actions, and then repeat them
+" without having to worry about the extra movement actions.  However it would
+" also *prevent* us from ending an action-group in a movement that might move
+" it to the correct place for the next movement.
+"
+" DONE: We might try to restore CursorHold events by periodically letting Vim
+" out of recording mode, but re-enabling recording as soon as CursorHold
+" fires!  A downside might be that we would fail to record keystrokes typed
+" very quickly after said release (before CursorHold fires).
+"
+" TODO (elsewhere): Accidentally doing  80\/  instead of  80\?  throws up a
+" lot of error messages: "Error detected while processing function
+"            MyRepeatedSearch..MyRepeatedSearch..MyRepeatedSearch.."
+" This actually comes from joey.vim.  It should fail gracefully when given a
+" count.
+"
+" DONE: Perhaps more advanced usage, which would also avoid complications
+" with *new* recordings might be to save repeated actions in a register, so it
+" can be recalled without worry about ignoring new movements/actions.
+" CONSIDER: We could even cycle the register used for saving, if we want to
+" remember older interesting action groups.
+"
+" Summary of the problems with "recording" message masking 'echo'-ed lines:
+"
+"  1. If we start macro recording after 3 echoes but before more echoes, the
+"     last of the previous 3 lines will be cleared by "recording" message
+"     (although it will also be cleared itself too, by the following echoes).
+"     We always see a blank line at that point (after the first 2).
+"
+"     We can address this by echoing a dumb line beforehand.
+"
+"  2. If we start macro recording at the end, before returning to the user, the
+"     "recording" message appears on the last of your ch lines.  But if you
+"     have N ch lines and there were *exactly* N echoes, the last one will be
+"     hidden by the "recording" message.  If there were <N echoes no problem,
+"     we can see them all.  If there were >N echoes, the overflow message will
+"     give us a change to see them all.
+"
+"     (This summary is slightly inaccurate - the problem also exists if we
+"     'qx' and then echo.)
+"
+"     (Does this problem only exist when we use RepeatLast_TriggerCursorHold?)
+"
+"     We can also address this by echoing a dumb line beforehand.  This might
+"     cause "unnecessary" overflow, but it *is* needed, to see that last echo.
+"
+"     In either case, a dummy line is pointless if there were no previous
+"     echos??
+"
+"     Whilst we could count our own echos, we cannot count any emitted from
+"     Vim or other scripts.
+
+
+
+" == Original development brainstorm ==
+
+" One approach might be to record a macro *all* the time, and then take the
+" last few things we need from it, when "\." is called.
+
+" The problem is, the macro might contain 12 keys which actually represent
+" only 2 actions.  For example "cwNewWord" is only one action.
+
+" Having to interactively select how much of the macro to use will slow down
+" the process, and lose the whole advantage of this feature.
+
+" So... can we split up the keys the macro recorded into actions?
+"
+"   - By parsing the macro from the start, we might be able to.  Hard work.
+"
+"   - We could watch for mode changes such as InsertEnter, CursorHold, and
+"     perhaps use these to split up our macro keys while they are being
+"     generated.  Still this will leave us not knowing how to split actions
+"     which do not change mode.  But it seems a great many do call
+"     CursorMoved.  :)
+"
+"     We are taking this approach.
+
+" Other alternatives?  Possibly by watching undo history (like UndoTree does)
+" or :changes (I'm not sure we can access this), or doing raw diffs on the
+" file, we might be able to crudely discover what changes the user has made,
+" and convert these into repeatable actions.  Sounds pretty heavy.
 
